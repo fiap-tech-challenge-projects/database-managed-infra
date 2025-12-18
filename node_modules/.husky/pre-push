@@ -1,0 +1,11 @@
+echo "Running pre-push checks..."
+
+npm run pre-push
+
+# Check if pre-push checks succeeded
+if [ $? -ne 0 ]; then
+  echo "Pre-push checks failed. Please fix the issues and try again."
+  exit 1
+fi
+
+echo "Pre-push checks completed successfully!" 
