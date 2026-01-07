@@ -1,0 +1,34 @@
+model Client {
+  id            String         @id @default(cuid())
+  name          String
+  email         String         @unique
+  phone         String?
+  cpfCnpj       String         @unique
+  address       String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  budgets       Budget[]
+  serviceOrders ServiceOrder[]
+  vehicles      Vehicle[]
+  user          User?
+
+  @@map("clients")
+}
+
+model Vehicle {
+  id                 String              @id @default(cuid())
+  licensePlate       String              @unique
+  make               String
+  model              String
+  year               Int
+  vin                String? //TODO: add validation
+  color              String?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  clientId           String
+  serviceOrders      ServiceOrder[]
+  vehicleEvaluations VehicleEvaluation[]
+  client             Client              @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@map("vehicles")
+}
