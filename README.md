@@ -1,98 +1,240 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Database Managed Infrastructure
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Infraestrutura de banco de dados gerenciado para o FIAP Tech Challenge - Fase 3.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Visao Geral
 
-## Description
+Este repositorio contem a infraestrutura como codigo (IaC) para provisionar e gerenciar o banco de dados PostgreSQL na AWS utilizando RDS (Relational Database Service).
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+### Arquitetura
 
-## Project setup
-
-```bash
-$ npm install
+```
+                    +-------------------+
+                    |   AWS Cloud       |
+                    |                   |
+    +---------------+-------------------+---------------+
+    |               |                   |               |
+    |   +-------+   |   +-----------+   |   +-------+   |
+    |   | EKS   |   |   |    RDS    |   |   | Lambda|   |
+    |   | Pods  |---+-->| PostgreSQL|<--+---| Funcs |   |
+    |   +-------+   |   +-----------+   |   +-------+   |
+    |               |         |         |               |
+    +---------------+---------+---------+---------------+
+                              |
+                    +---------+---------+
+                    |  Secrets Manager  |
+                    |  - DB Credentials |
+                    |  - JWT Secret     |
+                    +-------------------+
 ```
 
-## Compile and run the project
+## Recursos Provisionados
+
+- **RDS PostgreSQL 15**: Instancia de banco de dados gerenciada
+- **Security Groups**: Controle de acesso ao banco
+- **Subnet Group**: Subnets para o RDS
+- **Parameter Group**: Configuracoes otimizadas do PostgreSQL
+- **Secrets Manager**: Armazenamento seguro de credenciais
+- **IAM Policy**: Permissoes para acesso aos secrets
+
+## Tecnologias
+
+| Tecnologia | Versao | Descricao |
+|------------|--------|-----------|
+| Terraform | >= 1.5 | Infrastructure as Code |
+| AWS RDS | PostgreSQL 15 | Banco de dados gerenciado |
+| AWS Secrets Manager | - | Gerenciamento de credenciais |
+| Prisma | 6.x | ORM e migrations |
+
+## Pre-requisitos
+
+1. **AWS CLI** configurada com credenciais validas
+2. **Terraform** >= 1.5.0 instalado
+3. **Node.js** >= 20.x para rodar migrations
+4. **Bucket S3** para Terraform state (ver [Configuracao do Backend](#configuracao-do-backend))
+
+## Configuracao do Backend
+
+Antes do primeiro `terraform init`, crie o bucket S3 e tabela DynamoDB para o state:
 
 ```bash
-# development
-$ npm run start
+# Criar bucket S3
+aws s3 mb s3://fiap-tech-challenge-terraform-state --region us-east-1
 
-# watch mode
-$ npm run start:dev
+# Habilitar versionamento
+aws s3api put-bucket-versioning \
+  --bucket fiap-tech-challenge-terraform-state \
+  --versioning-configuration Status=Enabled
 
-# production mode
-$ npm run start:prod
+# Criar tabela DynamoDB para locking
+aws dynamodb create-table \
+  --table-name fiap-terraform-locks \
+  --attribute-definitions AttributeName=LockID,AttributeType=S \
+  --key-schema AttributeName=LockID,KeyType=HASH \
+  --billing-mode PAY_PER_REQUEST \
+  --region us-east-1
 ```
 
-## Run tests
+## Deploy
+
+### 1. Inicializar Terraform
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+cd terraform
+terraform init
 ```
 
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+### 2. Revisar o plano
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+terraform plan
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+### 3. Aplicar a infraestrutura
 
-## Resources
+```bash
+terraform apply
+```
 
-Check out a few resources that may come in handy when working with NestJS:
+### 4. Executar migrations
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+Apos o RDS estar disponivel:
 
-## Support
+```bash
+# Instalar dependencias
+npm install
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+# Executar script de migracao
+chmod +x scripts/run-migrations.sh
+./scripts/run-migrations.sh
+```
 
-## Stay in touch
+## Variaveis de Configuracao
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+| Variavel | Descricao | Default |
+|----------|-----------|---------|
+| `aws_region` | Regiao AWS | `us-east-1` |
+| `environment` | Ambiente (development/staging/production) | `development` |
+| `db_instance_class` | Classe da instancia RDS | `db.t3.micro` |
+| `db_allocated_storage` | Armazenamento em GB | `20` |
+| `db_engine_version` | Versao do PostgreSQL | `15.4` |
+| `db_multi_az` | Alta disponibilidade | `false` |
 
-## License
+Ver `terraform/variables.tf` para lista completa.
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+## Outputs
+
+Apos o deploy, os seguintes outputs estarao disponiveis:
+
+```bash
+# Endpoint do RDS
+terraform output rds_endpoint
+
+# ARN do secret com credenciais
+terraform output database_credentials_secret_arn
+
+# Security Group do RDS
+terraform output rds_security_group_id
+
+# Resumo completo
+terraform output summary
+```
+
+## Estrutura de Diretorios
+
+```
+database-managed-infra/
+├── terraform/
+│   ├── main.tf                 # Provider e backend
+│   ├── variables.tf            # Variaveis de entrada
+│   ├── rds.tf                  # Instancia RDS
+│   ├── security-groups.tf      # Security Groups
+│   ├── secrets-manager.tf      # Secrets Manager
+│   ├── outputs.tf              # Outputs
+│   └── terraform.tfvars        # Valores das variaveis
+├── prisma/
+│   └── schema/                 # Schema do banco de dados
+│       ├── schema.prisma       # Configuracao principal
+│       ├── auth.prisma         # Tabelas de autenticacao
+│       ├── clients.prisma      # Tabelas de clientes
+│       ├── service-orders.prisma # Tabelas de OS
+│       └── ...
+├── scripts/
+│   └── run-migrations.sh       # Script de migracao
+├── .github/
+│   └── workflows/
+│       └── terraform.yml       # CI/CD
+└── README.md
+```
+
+## CI/CD
+
+O pipeline do GitHub Actions executa:
+
+1. **fmt**: Verifica formatacao do Terraform
+2. **validate**: Valida a sintaxe
+3. **plan**: Gera plano de execucao (comentario no PR)
+4. **apply**: Aplica mudancas (apenas na branch main)
+
+### Secrets necessarios no GitHub
+
+- `AWS_ACCESS_KEY_ID`: Access Key da AWS
+- `AWS_SECRET_ACCESS_KEY`: Secret Key da AWS
+
+## Seguranca
+
+- Credenciais armazenadas no AWS Secrets Manager
+- Security Groups restritivos (apenas VPC interna)
+- Criptografia em repouso habilitada
+- Performance Insights para monitoramento
+
+## Troubleshooting
+
+### Erro de conexao com o RDS
+
+```bash
+# Verificar security groups
+aws ec2 describe-security-groups --group-ids <sg-id>
+
+# Verificar se o RDS esta disponivel
+aws rds describe-db-instances --db-instance-identifier fiap-tech-challenge-development-postgres
+```
+
+### Erro ao obter secrets
+
+```bash
+# Verificar se o secret existe
+aws secretsmanager list-secrets --region us-east-1
+
+# Obter valor do secret
+aws secretsmanager get-secret-value --secret-id fiap-tech-challenge/development/database/credentials
+```
+
+## Cleanup
+
+Para destruir toda a infraestrutura:
+
+```bash
+cd terraform
+terraform destroy
+```
+
+**ATENCAO**: Isso ira deletar o banco de dados e todos os dados!
+
+## Links Relacionados
+
+- [FIAP Tech Challenge - Plano Fase 3](../PHASE-3-PLAN.md)
+- [Projeto Principal - k8s-main-service](../k8s-main-service)
+- [Lambda Authorizer](../lambda-api-handler)
+- [Kubernetes Infrastructure](../kubernetes-core-infra)
+
+## Equipe
+
+- Ana Shurman
+- Franklin Campos
+- Rafael Lima (Finha)
+- Bruna Euzane
+
+---
+
+**FIAP Pos-Graduacao em Arquitetura de Software - Tech Challenge Fase 3**
