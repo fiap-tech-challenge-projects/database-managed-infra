@@ -59,11 +59,11 @@ Antes do primeiro `terraform init`, crie o bucket S3 e tabela DynamoDB para o st
 
 ```bash
 # Criar bucket S3
-aws s3 mb s3://fiap-tech-challenge-terraform-state --region us-east-1
+aws s3 mb s3://fiap-tech-challenge-tf-state-118735037876 --region us-east-1
 
 # Habilitar versionamento
 aws s3api put-bucket-versioning \
-  --bucket fiap-tech-challenge-terraform-state \
+  --bucket fiap-tech-challenge-tf-state-118735037876 \
   --versioning-configuration Status=Enabled
 
 # Criar tabela DynamoDB para locking
