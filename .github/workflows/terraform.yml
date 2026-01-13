@@ -149,6 +149,25 @@ jobs:
           echo "rds_address=$(terraform output -raw rds_address)" >> $GITHUB_OUTPUT
         working-directory: ${{ env.TF_WORKING_DIR }}
 
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.31.0'
+
+      - name: Configure kubectl
+        run: |
+          aws eks update-kubeconfig \
+            --region ${{ env.AWS_REGION }} \
+            --name fiap-tech-challenge-eks-staging
+
+      - name: Run Database Migrations
+        env:
+          ENVIRONMENT: staging
+          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+        run: |
+          cd scripts
+          ./run-migrations-auto.sh
+
       - name: Summary
         run: |
           echo "## Staging Database Deployment Complete" >> $GITHUB_STEP_SUMMARY
@@ -159,6 +178,9 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### RDS Endpoint" >> $GITHUB_STEP_SUMMARY
           echo "\`${{ steps.outputs.outputs.rds_endpoint }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Migrations" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Database migrations executed automatically" >> $GITHUB_STEP_SUMMARY
 
   # ---------------------------------------------------------------------------
   # Deploy to Production (main branch)
@@ -212,6 +234,25 @@ jobs:
           echo "rds_address=$(terraform output -raw rds_address)" >> $GITHUB_OUTPUT
         working-directory: ${{ env.TF_WORKING_DIR }}
 
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.31.0'
+
+      - name: Configure kubectl
+        run: |
+          aws eks update-kubeconfig \
+            --region ${{ env.AWS_REGION }} \
+            --name fiap-tech-challenge-eks-production
+
+      - name: Run Database Migrations
+        env:
+          ENVIRONMENT: production
+          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+        run: |
+          cd scripts
+          ./run-migrations-auto.sh
+
       - name: Summary
         run: |
           echo "## Production Database Deployment Complete" >> $GITHUB_STEP_SUMMARY
@@ -222,6 +263,9 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### RDS Endpoint" >> $GITHUB_STEP_SUMMARY
           echo "\`${{ steps.outputs.outputs.rds_endpoint }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Migrations" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Database migrations executed automatically" >> $GITHUB_STEP_SUMMARY
 
   # ---------------------------------------------------------------------------
   # Plan for PR

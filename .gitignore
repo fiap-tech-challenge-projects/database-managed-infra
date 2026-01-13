@@ -36,3 +36,6 @@ Thumbs.db
 # Environment
 .env
 .env.*
+
+# Claude Code guidance file
+CLAUDE.md
