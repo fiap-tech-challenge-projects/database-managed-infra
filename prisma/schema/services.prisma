@@ -1,0 +1,31 @@
+model Service {
+  id   String @id @default(cuid())
+  name String
+
+  description       String   @default("")
+  price             Int
+  estimatedDuration Float
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  budgetItems BudgetItem[]
+
+  @@map("services")
+}
+
+model ServiceExecution {
+  id             String                 @id @default(cuid())
+  status         ServiceExecutionStatus @default(ASSIGNED)
+  startTime      DateTime?
+  endTime        DateTime?
+  notes          String?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  serviceOrderId String                 @unique
+  mechanicId     String?
+  mechanic       Employee?              @relation(fields: [mechanicId], references: [id])
+  serviceOrder   ServiceOrder           @relation(fields: [serviceOrderId], references: [id], onDelete: Cascade)
+
+  @@map("service_executions")
+}

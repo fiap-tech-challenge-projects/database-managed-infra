@@ -1,0 +1,49 @@
+model StockItem {
+  id             String          @id @default(cuid())
+  name           String
+  description    String?
+  sku            String          @unique
+  currentStock   Int             @default(0)
+  minStockLevel  Int             @default(5)
+  unitCost       Int
+  unitSalePrice  Int
+  supplier       String? //TODO: could be a relation to a supplier
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  budgetItems    BudgetItem[]
+  stockOrders    StockOrder[]
+  stockMovements StockMovement[]
+
+  @@map("stock_items")
+}
+
+model StockMovement {
+  id           String            @id @default(cuid())
+  type         StockMovementType
+  quantity     Int
+  movementDate DateTime          @default(now())
+  reason       String?
+  notes        String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  stockId      String
+  stockItem    StockItem         @relation(fields: [stockId], references: [id], onDelete: Cascade)
+
+  @@map("stock_movements")
+}
+
+model StockOrder {
+  id                   String           @id @default(cuid())
+  status               StockOrderStatus @default(REQUESTED)
+  quantity             Int
+  orderDate            DateTime         @default(now())
+  expectedDeliveryDate DateTime?
+  actualDeliveryDate   DateTime?
+  notes                String?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  stockId              String
+  stockItem            StockItem        @relation(fields: [stockId], references: [id], onDelete: Cascade)
+
+  @@map("stock_orders")
+}

@@ -1,0 +1,79 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: database-migration
+  namespace: ftc-app-${ENVIRONMENT}
+  labels:
+    app: database-migration
+    component: infrastructure
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app: database-migration
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: migration-service-account
+      
+      containers:
+      - name: migrate
+        image: node:20-alpine
+        command:
+          - sh
+          - -c
+          - |
+            set -e
+            echo "Installing dependencies..."
+            npm install -g prisma @prisma/client
+            
+            echo "Fetching database credentials from Secrets Manager..."
+            apk add --no-cache aws-cli jq
+            
+            SECRET_JSON=$(aws secretsmanager get-secret-value \
+              --secret-id fiap/database/credentials \
+              --region ${AWS_REGION} \
+              --query SecretString \
+              --output text)
+            
+            DB_HOST=$(echo "$SECRET_JSON" | jq -r '.host')
+            DB_PORT=$(echo "$SECRET_JSON" | jq -r '.port // "5432"')
+            DB_NAME=$(echo "$SECRET_JSON" | jq -r '.database // "fiap_db"')
+            DB_USER=$(echo "$SECRET_JSON" | jq -r '.username')
+            DB_PASS=$(echo "$SECRET_JSON" | jq -r '.password')
+            
+            export DATABASE_URL="postgresql://${DB_USER}:${DB_PASS}@${DB_HOST}:${DB_PORT}/${DB_NAME}?schema=public"
+            
+            echo "Database connection: ${DB_HOST}:${DB_PORT}/${DB_NAME}"
+            
+            echo "Generating Prisma Client..."
+            cd /workspace
+            prisma generate --schema=./prisma/schema/schema.prisma
+            
+            echo "Running migrations..."
+            prisma migrate deploy --schema=./prisma/schema/schema.prisma
+            
+            echo "Migration completed successfully!"
+            
+        env:
+        - name: AWS_REGION
+          value: "us-east-1"
+          
+        volumeMounts:
+        - name: prisma-schema
+          mountPath: /workspace/prisma/schema
+          readOnly: true
+          
+      volumes:
+      - name: prisma-schema
+        configMap:
+          name: prisma-schema-files
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: migration-service-account
+  namespace: ftc-app-${ENVIRONMENT}
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::${AWS_ACCOUNT_ID}:role/LabRole
