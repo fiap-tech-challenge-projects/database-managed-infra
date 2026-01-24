@@ -19,11 +19,8 @@ terraform {
     }
   }
 
-  # Backend S3 para armazenamento do state
-  # NOTA: O bucket deve ser criado manualmente antes do primeiro terraform init
-  # Veja a secao 6.2 do PHASE-3-PLAN.md para instrucoes
+  # Backend S3 - bucket configured dynamically via terraform init -backend-config
   backend "s3" {
-    bucket         = "fiap-tech-challenge-tf-state-118735037876"
     key            = "database-managed-infra/terraform.tfstate"
     region         = "us-east-1"
     encrypt        = true
