@@ -49,7 +49,7 @@ data "aws_vpc" "selected" {
     for_each = var.vpc_id == "" ? [1] : []
     content {
       name   = "tag:Name"
-      values = ["fiap-eks-vpc"]
+      values = ["${var.project_name}-vpc-${var.environment}"]
     }
   }
 
