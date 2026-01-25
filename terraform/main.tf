@@ -48,6 +48,14 @@ data "aws_vpc" "selected" {
   dynamic "filter" {
     for_each = var.vpc_id == "" ? [1] : []
     content {
+      name   = "tag:Environment"
+      values = [var.environment]
+    }
+  }
+
+  dynamic "filter" {
+    for_each = var.vpc_id == "" ? [1] : []
+    content {
       name   = "tag:Name"
       values = ["${var.project_name}-vpc-${var.environment}"]
     }
