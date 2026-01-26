@@ -41,27 +41,16 @@ provider "aws" {
 data "aws_caller_identity" "current" {}
 
 # Data source para obter a VPC do EKS (sera criada pelo kubernetes-core-infra)
-# Se a VPC nao existir ainda, usa a VPC default
 data "aws_vpc" "selected" {
-  id = var.vpc_id != "" ? var.vpc_id : null
-
-  dynamic "filter" {
-    for_each = var.vpc_id == "" ? [1] : []
-    content {
-      name   = "tag:Environment"
-      values = [var.environment]
-    }
+  filter {
+    name   = "tag:Project"
+    values = [var.project_name]
   }
 
-  dynamic "filter" {
-    for_each = var.vpc_id == "" ? [1] : []
-    content {
-      name   = "tag:Name"
-      values = ["${var.project_name}-vpc-${var.environment}"]
-    }
+  filter {
+    name   = "tag:Environment"
+    values = [var.environment]
   }
-
-  default = var.vpc_id == "" ? true : false
 }
 
 # Data source para obter subnets privadas
