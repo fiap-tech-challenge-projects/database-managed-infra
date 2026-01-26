@@ -191,8 +191,6 @@ resource "aws_iam_policy" "secrets_access" {
   policy      = data.aws_iam_policy_document.secrets_access.json
 
   # AWS Academy: Cannot tag IAM policies (iam:TagPolicy not allowed)
-  # tags = merge(var.common_tags, {
-  #   Name        = "${var.project_name}-${var.environment}-secrets-access"
-  #   Environment = var.environment
-  # })
+  # Explicitly set tags to empty map to override provider default_tags
+  tags = {}
 }
