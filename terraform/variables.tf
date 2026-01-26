@@ -100,7 +100,7 @@ variable "db_max_allocated_storage" {
 variable "db_engine_version" {
   description = "Versao do PostgreSQL"
   type        = string
-  default     = "15.4"
+  default     = "15" # Will use latest minor version (15.10 as of Jan 2026)
 }
 
 variable "db_name" {

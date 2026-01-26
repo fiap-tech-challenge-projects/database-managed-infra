@@ -190,8 +190,9 @@ resource "aws_iam_policy" "secrets_access" {
   description = "Policy to allow access to Secrets Manager secrets for FIAP Tech Challenge"
   policy      = data.aws_iam_policy_document.secrets_access.json
 
-  tags = merge(var.common_tags, {
-    Name        = "${var.project_name}-${var.environment}-secrets-access"
-    Environment = var.environment
-  })
+  # AWS Academy: Cannot tag IAM policies (iam:TagPolicy not allowed)
+  # tags = merge(var.common_tags, {
+  #   Name        = "${var.project_name}-${var.environment}-secrets-access"
+  #   Environment = var.environment
+  # })
 }
