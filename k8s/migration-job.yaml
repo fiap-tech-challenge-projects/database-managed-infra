@@ -30,21 +30,20 @@ spec:
             
             echo "Fetching database credentials from Secrets Manager..."
             apk add --no-cache aws-cli jq
-            
+
             SECRET_JSON=$(aws secretsmanager get-secret-value \
-              --secret-id fiap/database/credentials \
+              --secret-id fiap-tech-challenge/${ENVIRONMENT}/database/credentials \
               --region ${AWS_REGION} \
               --query SecretString \
               --output text)
-            
+
+            # Secret already contains DATABASE_URL
+            export DATABASE_URL=$(echo "$SECRET_JSON" | jq -r '.DATABASE_URL')
+
             DB_HOST=$(echo "$SECRET_JSON" | jq -r '.host')
-            DB_PORT=$(echo "$SECRET_JSON" | jq -r '.port // "5432"')
-            DB_NAME=$(echo "$SECRET_JSON" | jq -r '.database // "fiap_db"')
-            DB_USER=$(echo "$SECRET_JSON" | jq -r '.username')
-            DB_PASS=$(echo "$SECRET_JSON" | jq -r '.password')
-            
-            export DATABASE_URL="postgresql://${DB_USER}:${DB_PASS}@${DB_HOST}:${DB_PORT}/${DB_NAME}?schema=public"
-            
+            DB_PORT=$(echo "$SECRET_JSON" | jq -r '.port')
+            DB_NAME=$(echo "$SECRET_JSON" | jq -r '.dbname')
+
             echo "Database connection: ${DB_HOST}:${DB_PORT}/${DB_NAME}"
             
             echo "Generating Prisma Client..."
@@ -59,7 +58,9 @@ spec:
         env:
         - name: AWS_REGION
           value: "us-east-1"
-          
+        - name: ENVIRONMENT
+          value: "${ENVIRONMENT}"
+
         volumeMounts:
         - name: prisma-schema
           mountPath: /workspace/prisma/schema

@@ -30,11 +30,17 @@ echo "  EKS Cluster: $CLUSTER_NAME"
 echo -e "\n${YELLOW}Configuring kubectl...${NC}"
 aws eks update-kubeconfig --region "$AWS_REGION" --name "$CLUSTER_NAME"
 
+echo -e "\n${YELLOW}Ensuring namespace exists...${NC}"
+kubectl create namespace "ftc-app-${ENVIRONMENT}" --dry-run=client -o yaml | kubectl apply -f -
+
 echo -e "\n${YELLOW}Creating Prisma schema ConfigMap...${NC}"
 kubectl create configmap prisma-schema-files \
   --from-file=../prisma/schema/ \
   --namespace="ftc-app-${ENVIRONMENT}" \
   --dry-run=client -o yaml | kubectl apply -f -
+
+echo -e "\n${YELLOW}Cleaning up previous migration job if exists...${NC}"
+kubectl delete job database-migration -n "ftc-app-${ENVIRONMENT}" --ignore-not-found=true
 
 echo -e "\n${YELLOW}Applying migration job...${NC}"
 cat ../k8s/migration-job.yaml | \
@@ -43,7 +49,7 @@ cat ../k8s/migration-job.yaml | \
   kubectl apply -f -
 
 echo -e "\n${YELLOW}Waiting for migration job to complete...${NC}"
-kubectl wait --for=condition=complete --timeout=300s \
+kubectl wait --for=condition=complete --timeout=600s \
   job/database-migration \
   -n "ftc-app-${ENVIRONMENT}" || true
 
