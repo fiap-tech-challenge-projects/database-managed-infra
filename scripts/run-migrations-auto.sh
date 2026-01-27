@@ -37,7 +37,7 @@ kubectl create configmap prisma-schema-files \
   --dry-run=client -o yaml | kubectl apply -f -
 
 echo -e "\n${YELLOW}Applying migration job...${NC}"
-cat k8s/migration-job.yaml | \
+cat ../k8s/migration-job.yaml | \
   sed "s/\${ENVIRONMENT}/${ENVIRONMENT}/g" | \
   sed "s/\${AWS_ACCOUNT_ID}/${AWS_ACCOUNT_ID}/g" | \
   kubectl apply -f -
