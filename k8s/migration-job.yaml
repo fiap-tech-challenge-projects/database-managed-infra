@@ -76,5 +76,12 @@ kind: ServiceAccount
 metadata:
   name: migration-service-account
   namespace: ftc-app-${ENVIRONMENT}
-  annotations:
-    eks.amazonaws.com/role-arn: arn:aws:iam::${AWS_ACCOUNT_ID}:role/LabRole
+  # Production: Pod inherits permissions from EKS node IAM role
+  # Node role (aws_iam_role.eks_nodes) has permissions for:
+  # - Secrets Manager (read secrets)
+  # - RDS (connect to database)
+  # - ECR (pull container images)
+  #
+  # AWS ACADEMY: Add LabRole annotation for Academy environment
+  # annotations:
+  #   eks.amazonaws.com/role-arn: arn:aws:iam::${AWS_ACCOUNT_ID}:role/LabRole

@@ -43,14 +43,17 @@ echo -e "\n${YELLOW}Cleaning up previous migration job if exists...${NC}"
 kubectl delete job database-migration -n "ftc-app-${ENVIRONMENT}" --ignore-not-found=true
 
 echo -e "\n${YELLOW}Creating ServiceAccount for migrations...${NC}"
+# Production: ServiceAccount inherits permissions from node IAM role
+# Node role has necessary permissions for Secrets Manager and RDS
 cat <<EOF | kubectl apply -f -
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: migration-service-account
   namespace: ftc-app-${ENVIRONMENT}
-  annotations:
-    eks.amazonaws.com/role-arn: arn:aws:iam::${AWS_ACCOUNT_ID}:role/LabRole
+  # AWS ACADEMY: Uncomment the annotation below to use LabRole
+  # annotations:
+  #   eks.amazonaws.com/role-arn: arn:aws:iam::${AWS_ACCOUNT_ID}:role/LabRole
 EOF
 
 echo -e "\n${YELLOW}Applying migration job...${NC}"
