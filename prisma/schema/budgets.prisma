@@ -1,0 +1,41 @@
+model Budget {
+  id             String          @id @default(cuid())
+  status         BudgetStatus    @default(GENERATED)
+  totalAmount    Int
+  validityPeriod Int             @default(7)
+  generationDate DateTime        @default(now())
+  sentDate       DateTime?
+  approvalDate   DateTime?
+  rejectionDate  DateTime?
+  deliveryMethod DeliveryMethod?
+  notes          String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  serviceOrderId String          @unique
+  clientId       String
+  budgetItems    BudgetItem[]
+  client         Client          @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  serviceOrder   ServiceOrder    @relation(fields: [serviceOrderId], references: [id], onDelete: Cascade)
+
+  @@map("budgets")
+}
+
+model BudgetItem {
+  id          String         @id @default(cuid())
+  type        BudgetItemType
+  description String
+  quantity    Int            @default(1)
+  unitPrice   Int
+  totalPrice  Int
+  notes       String?
+  createdAt   DateTime       @default(now())
+
+  budgetId    String
+  budget      Budget     @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  serviceId   String?
+  service     Service?   @relation(fields: [serviceId], references: [id])
+  stockItemId String?
+  stockItem   StockItem? @relation(fields: [stockItemId], references: [id])
+
+  @@map("budget_items")
+}

@@ -1,0 +1,67 @@
+enum UserRole {
+  CLIENT
+  EMPLOYEE
+  ADMIN
+}
+
+enum ServiceOrderStatus {
+  REQUESTED
+  RECEIVED
+  IN_DIAGNOSIS
+  AWAITING_APPROVAL
+  APPROVED
+  REJECTED
+  SCHEDULED
+  IN_EXECUTION
+  FINISHED
+  DELIVERED
+  CANCELLED
+}
+
+enum BudgetStatus {
+  GENERATED
+  SENT
+  RECEIVED
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+enum DeliveryMethod {
+  EMAIL
+  SMS
+  WHATSAPP
+  PHONE
+  IN_PERSON
+}
+
+enum BudgetItemType {
+  SERVICE
+  STOCK_ITEM
+}
+
+enum AppointmentStatus {
+  REQUESTED
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+enum StockMovementType {
+  IN
+  OUT
+  ADJUSTMENT
+}
+
+enum StockOrderStatus {
+  REQUESTED
+  ORDERED
+  RECEIVED
+  CANCELLED
+}
+
+enum ServiceExecutionStatus {
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+}
