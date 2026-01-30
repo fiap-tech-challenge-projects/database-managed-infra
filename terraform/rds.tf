@@ -105,7 +105,7 @@ resource "aws_db_instance" "postgres" {
   # Storage Configuration
   allocated_storage     = var.db_allocated_storage
   max_allocated_storage = var.db_max_allocated_storage > 0 ? var.db_max_allocated_storage : null
-  storage_type          = "gp3"
+  storage_type          = "gp2" # FREE TIER: gp2 is more compatible than gp3
   storage_encrypted     = true
 
   # Database Configuration

@@ -35,8 +35,8 @@ db_publicly_accessible = false
 db_deletion_protection = false
 db_skip_final_snapshot = true
 
-# Backup Configuration
-db_backup_retention_period = 7
+# Backup Configuration - FREE TIER COMPATIBLE
+db_backup_retention_period = 0 # FREE TIER: Backup automático não suportado
 db_backup_window           = "03:00-04:00"
 db_maintenance_window      = "Mon:04:00-Mon:05:00"
 
