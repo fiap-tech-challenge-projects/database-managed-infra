@@ -82,26 +82,39 @@ echo -e "\n${YELLOW}Checking pod status...${NC}"
 sleep 5
 kubectl get pods -n "ftc-app-${ENVIRONMENT}" -l app=database-migration
 
-echo -e "\n${YELLOW}Waiting for migration job to complete...${NC}"
+echo -e "\n${YELLOW}Streaming pod logs (will follow until completion)...${NC}"
+# Stream logs in background and save to file
+kubectl logs -f -n "ftc-app-${ENVIRONMENT}" -l app=database-migration --all-containers=true 2>&1 | tee /tmp/migration-logs.txt &
+LOGS_PID=$!
+
+echo -e "\n${YELLOW}Waiting for migration job to complete (timeout: 10 minutes)...${NC}"
 kubectl wait --for=condition=complete --timeout=600s \
   job/database-migration \
   -n "ftc-app-${ENVIRONMENT}" || true
+
+# Stop log streaming
+kill $LOGS_PID 2>/dev/null || true
 
 JOB_STATUS=$(kubectl get job database-migration -n "ftc-app-${ENVIRONMENT}" -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}')
 
 if [ "$JOB_STATUS" == "True" ]; then
   echo -e "\n${GREEN}Migration completed successfully!${NC}"
-  kubectl logs job/database-migration -n "ftc-app-${ENVIRONMENT}"
+  echo -e "\n${YELLOW}Full migration logs:${NC}"
+  cat /tmp/migration-logs.txt 2>/dev/null || kubectl logs job/database-migration -n "ftc-app-${ENVIRONMENT}"
   exit 0
 else
   echo -e "\n${RED}Migration failed or timed out!${NC}"
   echo -e "\n${YELLOW}Job status:${NC}"
-  kubectl get job database-migration -n "ftc-app-${ENVIRONMENT}" -o yaml
+  kubectl get job database-migration -n "ftc-app-${ENVIRONMENT}" -o yaml 2>/dev/null || echo "Job not found (may have been deleted by ttlSecondsAfterFinished)"
   echo -e "\n${YELLOW}Pod status:${NC}"
   kubectl get pods -n "ftc-app-${ENVIRONMENT}" -l app=database-migration
   echo -e "\n${YELLOW}Pod events:${NC}"
   kubectl get events -n "ftc-app-${ENVIRONMENT}" --field-selector involvedObject.kind=Pod --sort-by='.lastTimestamp' | tail -20
-  echo -e "\n${YELLOW}Pod logs (if available):${NC}"
-  kubectl logs -n "ftc-app-${ENVIRONMENT}" -l app=database-migration --all-containers=true --tail=100 || echo "No logs available"
+  echo -e "\n${YELLOW}Complete pod logs (captured during execution):${NC}"
+  if [ -f /tmp/migration-logs.txt ]; then
+    cat /tmp/migration-logs.txt
+  else
+    kubectl logs -n "ftc-app-${ENVIRONMENT}" -l app=database-migration --all-containers=true --tail=200 || echo "No logs available"
+  fi
   exit 1
 fi
