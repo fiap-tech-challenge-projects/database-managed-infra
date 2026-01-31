@@ -26,7 +26,9 @@ spec:
           - |
             set -e
             echo "Installing dependencies..."
-            npm install -g prisma @prisma/client
+            # Use Prisma 6.x (latest stable that supports url in datasource)
+            # Prisma 7.x removed support for datasource url property
+            npm install -g prisma@6.16.0 @prisma/client@6.16.0
             
             echo "Fetching database credentials from Secrets Manager..."
             apk add --no-cache aws-cli jq
