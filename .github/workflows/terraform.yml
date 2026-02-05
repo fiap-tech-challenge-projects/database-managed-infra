@@ -39,6 +39,7 @@ permissions:
   contents: read
   pull-requests: write
   issues: write
+  packages: write  # Required for pushing to GitHub Container Registry
 
 env:
   TF_VERSION: '1.5.0'
