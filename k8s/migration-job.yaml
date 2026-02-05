@@ -23,6 +23,8 @@ spec:
     spec:
       restartPolicy: OnFailure
       serviceAccountName: migration-service-account
+      imagePullSecrets:
+        - name: ghcr-secret
 
       containers:
       - name: migrate

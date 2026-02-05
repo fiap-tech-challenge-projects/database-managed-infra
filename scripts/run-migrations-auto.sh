@@ -44,6 +44,15 @@ kubectl create namespace "ftc-app-${ENVIRONMENT}" --dry-run=client -o yaml | kub
 echo -e "\n${YELLOW}Cleaning up previous migration job if exists...${NC}"
 kubectl delete job database-migration -n "ftc-app-${ENVIRONMENT}" --ignore-not-found=true
 
+echo -e "\n${YELLOW}Creating imagePullSecret for GHCR...${NC}"
+# Create secret for pulling images from GitHub Container Registry
+kubectl create secret docker-registry ghcr-secret \
+  --docker-server=ghcr.io \
+  --docker-username="${GITHUB_ACTOR}" \
+  --docker-password="${GITHUB_TOKEN}" \
+  --namespace="ftc-app-${ENVIRONMENT}" \
+  --dry-run=client -o yaml | kubectl apply -f -
+
 echo -e "\n${YELLOW}Creating ServiceAccount for migrations...${NC}"
 # Production: ServiceAccount inherits permissions from node IAM role
 # Node role has necessary permissions for Secrets Manager and RDS
@@ -56,6 +65,8 @@ metadata:
   # AWS ACADEMY: Uncomment the annotation below to use LabRole
   # annotations:
   #   eks.amazonaws.com/role-arn: arn:aws:iam::${AWS_ACCOUNT_ID}:role/LabRole
+imagePullSecrets:
+  - name: ghcr-secret
 EOF
 
 echo -e "\n${YELLOW}Applying migration job...${NC}"
