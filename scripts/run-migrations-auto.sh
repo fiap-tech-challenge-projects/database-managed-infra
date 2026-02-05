@@ -30,8 +30,8 @@ echo "  EKS Cluster: $CLUSTER_NAME"
 echo "  Image Tag: $IMAGE_TAG"
 
 # Determine registry (GitHub Container Registry for this project)
-REGISTRY="ghcr.io/fiap-tech-challenge-projects"
-IMAGE_NAME="database-migrations"
+REGISTRY="ghcr.io/fiap-tech-challenge-projects/database-managed-infra"
+IMAGE_NAME="migrations"
 FULL_IMAGE="${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
 LATEST_IMAGE="${REGISTRY}/${IMAGE_NAME}:${ENVIRONMENT}"
 

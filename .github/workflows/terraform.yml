@@ -179,8 +179,8 @@ jobs:
           file: ./Dockerfile.migrations
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/database-migrations:staging
-            ghcr.io/${{ github.repository_owner }}/database-migrations:staging-${{ github.sha }}
+            ghcr.io/${{ github.repository }}/migrations:staging
+            ghcr.io/${{ github.repository }}/migrations:staging-${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -299,8 +299,8 @@ jobs:
           file: ./Dockerfile.migrations
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/database-migrations:production
-            ghcr.io/${{ github.repository_owner }}/database-migrations:production-${{ github.sha }}
+            ghcr.io/${{ github.repository }}/migrations:production
+            ghcr.io/${{ github.repository }}/migrations:production-${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

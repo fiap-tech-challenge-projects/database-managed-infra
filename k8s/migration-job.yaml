@@ -28,7 +28,7 @@ spec:
       - name: migrate
         # Migration image built from Dockerfile.migrations
         # Contains Prisma schema + migrations baked in
-        image: ghcr.io/fiap-tech-challenge-projects/database-migrations:${ENVIRONMENT}
+        image: ghcr.io/fiap-tech-challenge-projects/database-managed-infra/migrations:${ENVIRONMENT}
         imagePullPolicy: Always
         command:
           - sh
