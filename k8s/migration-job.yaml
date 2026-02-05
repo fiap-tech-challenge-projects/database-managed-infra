@@ -54,9 +54,21 @@ spec:
 
             echo "📊 Database connection: ${DB_HOST}:${DB_PORT}/${DB_NAME}"
 
-            echo "📝 Listing available migrations..."
-            ls -la /app/prisma/migrations/ 2>/dev/null || echo "⚠️  No migrations directory found"
+            echo "📝 Checking Prisma directory structure..."
+            ls -la /app/prisma/ || echo "⚠️  No prisma directory found"
 
+            echo ""
+            echo "📝 Listing available migration files..."
+            if [ -d "/app/prisma/migrations" ]; then
+              ls -la /app/prisma/migrations/
+              echo ""
+              echo "Migration count: $(ls -1 /app/prisma/migrations/ | grep -v migration_lock.toml | wc -l)"
+            else
+              echo "❌ No migrations directory found!"
+              exit 1
+            fi
+
+            echo ""
             echo "🚀 Running Prisma migrations..."
             cd /app
             prisma migrate deploy --schema=./prisma/schema.prisma
