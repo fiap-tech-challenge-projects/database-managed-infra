@@ -26,13 +26,12 @@ echo "  Environment: $ENVIRONMENT"
 echo "  AWS Region: $AWS_REGION"
 echo "  EKS Cluster: $CLUSTER_NAME"
 
-# Docker image is already built and pushed by GitHub Actions workflow
-# Just reference the image that was built
-REGISTRY="ghcr.io/fiap-tech-challenge-projects/database-managed-infra"
-IMAGE_NAME="migrations"
-LATEST_IMAGE="${REGISTRY}/${IMAGE_NAME}:${ENVIRONMENT}"
+# Docker image is already built and pushed to ECR by GitHub Actions workflow
+# ECR authentication is automatic via EKS node IAM role - no imagePullSecrets needed
+LATEST_IMAGE="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/database-migrations:${ENVIRONMENT}"
 
-echo -e "\n${YELLOW}Using Docker image: ${LATEST_IMAGE}${NC}"
+echo -e "\n${YELLOW}Using Docker image from ECR:${NC}"
+echo "  ${LATEST_IMAGE}"
 echo -e "${GREEN}(Image was built and pushed by GitHub Actions workflow)${NC}"
 
 echo -e "\n${YELLOW}Configuring kubectl...${NC}"
@@ -44,18 +43,12 @@ kubectl create namespace "ftc-app-${ENVIRONMENT}" --dry-run=client -o yaml | kub
 echo -e "\n${YELLOW}Cleaning up previous migration job if exists...${NC}"
 kubectl delete job database-migration -n "ftc-app-${ENVIRONMENT}" --ignore-not-found=true
 
-echo -e "\n${YELLOW}Creating imagePullSecret for GHCR...${NC}"
-# Create secret for pulling images from GitHub Container Registry
-kubectl create secret docker-registry ghcr-secret \
-  --docker-server=ghcr.io \
-  --docker-username="${GITHUB_ACTOR}" \
-  --docker-password="${GITHUB_TOKEN}" \
-  --namespace="ftc-app-${ENVIRONMENT}" \
-  --dry-run=client -o yaml | kubectl apply -f -
-
 echo -e "\n${YELLOW}Creating ServiceAccount for migrations...${NC}"
-# Production: ServiceAccount inherits permissions from node IAM role
-# Node role has necessary permissions for Secrets Manager and RDS
+# ServiceAccount inherits permissions from EKS node IAM role
+# Node role has permissions for:
+# - ECR image pulling (automatic, no imagePullSecrets needed)
+# - Secrets Manager (read database credentials)
+# - RDS (connect to database)
 cat <<EOF | kubectl apply -f -
 apiVersion: v1
 kind: ServiceAccount
@@ -65,8 +58,6 @@ metadata:
   # AWS ACADEMY: Uncomment the annotation below to use LabRole
   # annotations:
   #   eks.amazonaws.com/role-arn: arn:aws:iam::${AWS_ACCOUNT_ID}:role/LabRole
-imagePullSecrets:
-  - name: ghcr-secret
 EOF
 
 echo -e "\n${YELLOW}Applying migration job...${NC}"

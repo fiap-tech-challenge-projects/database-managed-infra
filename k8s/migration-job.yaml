@@ -23,14 +23,14 @@ spec:
     spec:
       restartPolicy: OnFailure
       serviceAccountName: migration-service-account
-      imagePullSecrets:
-        - name: ghcr-secret
+      # No imagePullSecrets needed - ECR access via EKS node IAM role
 
       containers:
       - name: migrate
-        # Migration image built from Dockerfile.migrations
+        # Migration image from ECR - built and pushed by GitHub Actions
         # Contains Prisma schema + migrations baked in
-        image: ghcr.io/fiap-tech-challenge-projects/database-managed-infra/migrations:${ENVIRONMENT}
+        # ECR image format: <account>.dkr.ecr.<region>.amazonaws.com/database-migrations:<env>
+        image: ${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/database-migrations:${ENVIRONMENT}
         imagePullPolicy: Always
         command:
           - sh
