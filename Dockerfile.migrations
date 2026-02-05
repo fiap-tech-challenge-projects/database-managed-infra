@@ -1,0 +1,25 @@
+# =============================================================================
+# Dockerfile for Prisma Migrations
+# =============================================================================
+# This image contains Prisma schema and migrations for database deployment
+# Used by Kubernetes Jobs to run migrations automatically
+# =============================================================================
+
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install Prisma CLI
+RUN npm install -g prisma@6.16.0 @prisma/client@6.16.0
+
+# Install AWS CLI and PostgreSQL client for database operations
+RUN apk add --no-cache aws-cli jq postgresql-client
+
+# Copy Prisma schema files
+COPY prisma/schema /app/prisma
+
+# Generate Prisma Client (optional, but good for validation)
+RUN cd /app && prisma generate --schema=./prisma/schema.prisma
+
+# Default command runs migrations
+CMD ["sh", "-c", "prisma migrate deploy --schema=./prisma/schema.prisma"]

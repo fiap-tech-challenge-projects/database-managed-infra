@@ -3,7 +3,7 @@
 # Automated Migration Trigger
 # =============================================================================
 # Runs automatically in CI/CD after Terraform creates RDS
-# Triggers Kubernetes Job to run migrations
+# Builds Docker image with migrations and triggers Kubernetes Job
 # =============================================================================
 
 set -e
@@ -21,11 +21,18 @@ ENVIRONMENT="${ENVIRONMENT:-staging}"
 AWS_REGION="${AWS_REGION:-us-east-1}"
 CLUSTER_NAME="fiap-tech-challenge-eks-${ENVIRONMENT}"
 AWS_ACCOUNT_ID="${AWS_ACCOUNT_ID:-118735037876}"
-
 echo -e "\n${YELLOW}Configuration:${NC}"
 echo "  Environment: $ENVIRONMENT"
 echo "  AWS Region: $AWS_REGION"
 echo "  EKS Cluster: $CLUSTER_NAME"
+
+# Docker image is already built and pushed to ECR by GitHub Actions workflow
+# ECR authentication is automatic via EKS node IAM role - no imagePullSecrets needed
+LATEST_IMAGE="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/database-migrations:${ENVIRONMENT}"
+
+echo -e "\n${YELLOW}Using Docker image from ECR:${NC}"
+echo "  ${LATEST_IMAGE}"
+echo -e "${GREEN}(Image was built and pushed by GitHub Actions workflow)${NC}"
 
 echo -e "\n${YELLOW}Configuring kubectl...${NC}"
 aws eks update-kubeconfig --region "$AWS_REGION" --name "$CLUSTER_NAME"
@@ -33,18 +40,15 @@ aws eks update-kubeconfig --region "$AWS_REGION" --name "$CLUSTER_NAME"
 echo -e "\n${YELLOW}Ensuring namespace exists...${NC}"
 kubectl create namespace "ftc-app-${ENVIRONMENT}" --dry-run=client -o yaml | kubectl apply -f -
 
-echo -e "\n${YELLOW}Creating Prisma schema ConfigMap...${NC}"
-kubectl create configmap prisma-schema-files \
-  --from-file=../prisma/schema/ \
-  --namespace="ftc-app-${ENVIRONMENT}" \
-  --dry-run=client -o yaml | kubectl apply -f -
-
 echo -e "\n${YELLOW}Cleaning up previous migration job if exists...${NC}"
 kubectl delete job database-migration -n "ftc-app-${ENVIRONMENT}" --ignore-not-found=true
 
 echo -e "\n${YELLOW}Creating ServiceAccount for migrations...${NC}"
-# Production: ServiceAccount inherits permissions from node IAM role
-# Node role has necessary permissions for Secrets Manager and RDS
+# ServiceAccount inherits permissions from EKS node IAM role
+# Node role has permissions for:
+# - ECR image pulling (automatic, no imagePullSecrets needed)
+# - Secrets Manager (read database credentials)
+# - RDS (connect to database)
 cat <<EOF | kubectl apply -f -
 apiVersion: v1
 kind: ServiceAccount
@@ -57,14 +61,26 @@ metadata:
 EOF
 
 echo -e "\n${YELLOW}Applying migration job...${NC}"
-cat ../k8s/migration-job.yaml | \
+
+# Script is executed from scripts/ directory by GitHub Actions
+# So we need to go up one level to access k8s/ directory
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+MIGRATION_JOB_YAML="$REPO_ROOT/k8s/migration-job.yaml"
+
+if [ ! -f "$MIGRATION_JOB_YAML" ]; then
+  echo -e "${RED}Error: migration-job.yaml not found at $MIGRATION_JOB_YAML${NC}"
+  exit 1
+fi
+
+cat "$MIGRATION_JOB_YAML" | \
   sed "s/\${ENVIRONMENT}/${ENVIRONMENT}/g" | \
   sed "s/\${AWS_ACCOUNT_ID}/${AWS_ACCOUNT_ID}/g" | \
   sed '/^---$/,$d' | \
   kubectl apply -f - || {
     echo -e "${RED}Failed to create migration job!${NC}"
     echo -e "${YELLOW}Showing processed YAML:${NC}"
-    cat ../k8s/migration-job.yaml | \
+    cat "$MIGRATION_JOB_YAML" | \
       sed "s/\${ENVIRONMENT}/${ENVIRONMENT}/g" | \
       sed "s/\${AWS_ACCOUNT_ID}/${AWS_ACCOUNT_ID}/g" | \
       sed '/^---$/,$d'
@@ -98,19 +114,17 @@ kill $LOGS_PID 2>/dev/null || true
 JOB_STATUS=$(kubectl get job database-migration -n "ftc-app-${ENVIRONMENT}" -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}')
 
 if [ "$JOB_STATUS" == "True" ]; then
-  echo -e "\n${GREEN}Migration completed successfully!${NC}"
+  echo -e "\n${GREEN}✅ Migration completed successfully!${NC}"
   echo -e "\n${YELLOW}Full migration logs:${NC}"
   cat /tmp/migration-logs.txt 2>/dev/null || kubectl logs job/database-migration -n "ftc-app-${ENVIRONMENT}"
   exit 0
 else
-  echo -e "\n${RED}Migration failed or timed out!${NC}"
+  echo -e "\n${RED}❌ Migration failed or timed out!${NC}"
   echo -e "\n${YELLOW}Job status:${NC}"
-  kubectl get job database-migration -n "ftc-app-${ENVIRONMENT}" -o yaml 2>/dev/null || echo "Job not found (may have been deleted by ttlSecondsAfterFinished)"
+  kubectl get job database-migration -n "ftc-app-${ENVIRONMENT}" -o yaml 2>/dev/null || echo "Job not found"
   echo -e "\n${YELLOW}Pod status:${NC}"
   kubectl get pods -n "ftc-app-${ENVIRONMENT}" -l app=database-migration
-  echo -e "\n${YELLOW}Pod events:${NC}"
-  kubectl get events -n "ftc-app-${ENVIRONMENT}" --field-selector involvedObject.kind=Pod --sort-by='.lastTimestamp' | tail -20
-  echo -e "\n${YELLOW}Complete pod logs (captured during execution):${NC}"
+  echo -e "\n${YELLOW}Complete pod logs:${NC}"
   if [ -f /tmp/migration-logs.txt ]; then
     cat /tmp/migration-logs.txt
   else

@@ -1,3 +1,10 @@
+# =============================================================================
+# Kubernetes Job - Database Migration
+# =============================================================================
+# Runs Prisma migrations using a custom Docker image that contains
+# the Prisma schema and all migration files
+# =============================================================================
+
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -8,7 +15,7 @@ metadata:
     component: infrastructure
 spec:
   backoffLimit: 3
-  ttlSecondsAfterFinished: 900  # 15 minutes (increased for debugging)
+  ttlSecondsAfterFinished: 900  # 15 minutes
   template:
     metadata:
       labels:
@@ -16,62 +23,64 @@ spec:
     spec:
       restartPolicy: OnFailure
       serviceAccountName: migration-service-account
-      
+      # No imagePullSecrets needed - ECR access via EKS node IAM role
+
       containers:
       - name: migrate
-        image: node:20-alpine
+        # Migration image from ECR - built and pushed by GitHub Actions
+        # Contains Prisma schema + migrations baked in
+        # ECR image format: <account>.dkr.ecr.<region>.amazonaws.com/database-migrations:<env>
+        image: ${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/database-migrations:${ENVIRONMENT}
+        imagePullPolicy: Always
         command:
           - sh
           - -c
           - |
             set -e
-            echo "Installing dependencies..."
-            # Use Prisma 6.x (latest stable that supports url in datasource)
-            # Prisma 7.x removed support for datasource url property
-            npm install -g prisma@6.16.0 @prisma/client@6.16.0
-            
-            echo "Fetching database credentials from Secrets Manager..."
-            apk add --no-cache aws-cli jq
 
+            echo "🔐 Fetching database credentials from Secrets Manager..."
             SECRET_JSON=$(aws secretsmanager get-secret-value \
               --secret-id fiap-tech-challenge/${ENVIRONMENT}/database/credentials \
               --region ${AWS_REGION} \
               --query SecretString \
               --output text)
 
-            # Secret already contains DATABASE_URL
+            # Export DATABASE_URL for Prisma
             export DATABASE_URL=$(echo "$SECRET_JSON" | jq -r '.DATABASE_URL')
 
             DB_HOST=$(echo "$SECRET_JSON" | jq -r '.host')
             DB_PORT=$(echo "$SECRET_JSON" | jq -r '.port')
             DB_NAME=$(echo "$SECRET_JSON" | jq -r '.dbname')
 
-            echo "Database connection: ${DB_HOST}:${DB_PORT}/${DB_NAME}"
-            
-            echo "Generating Prisma Client..."
-            cd /workspace
-            prisma generate --schema=./prisma/schema/schema.prisma
-            
-            echo "Running migrations..."
-            prisma migrate deploy --schema=./prisma/schema/schema.prisma
-            
-            echo "Migration completed successfully!"
-            
+            echo "📊 Database connection: ${DB_HOST}:${DB_PORT}/${DB_NAME}"
+
+            echo "📝 Checking Prisma directory structure..."
+            ls -la /app/prisma/ || echo "⚠️  No prisma directory found"
+
+            echo ""
+            echo "📝 Listing available migration files..."
+            if [ -d "/app/prisma/migrations" ]; then
+              ls -la /app/prisma/migrations/
+              echo ""
+              echo "Migration count: $(ls -1 /app/prisma/migrations/ | grep -v migration_lock.toml | wc -l)"
+            else
+              echo "❌ No migrations directory found!"
+              exit 1
+            fi
+
+            echo ""
+            echo "🚀 Running Prisma migrations..."
+            cd /app
+            prisma migrate deploy --schema=./prisma/schema.prisma
+
+            echo "✅ Migration completed successfully!"
+
         env:
         - name: AWS_REGION
           value: "us-east-1"
         - name: ENVIRONMENT
           value: "${ENVIRONMENT}"
 
-        volumeMounts:
-        - name: prisma-schema
-          mountPath: /workspace/prisma/schema
-          readOnly: true
-          
-      volumes:
-      - name: prisma-schema
-        configMap:
-          name: prisma-schema-files
 ---
 apiVersion: v1
 kind: ServiceAccount

@@ -1,0 +1,165 @@
+# =============================================================================
+# Debug Job - Check Database State
+# =============================================================================
+# Connects to RDS and verifies what tables and migrations exist
+# =============================================================================
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: debug-database
+  namespace: ftc-app-${ENVIRONMENT}
+  labels:
+    app: debug-database
+    component: infrastructure
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 3600  # Keep for 1 hour for debugging
+  template:
+    metadata:
+      labels:
+        app: debug-database
+    spec:
+      restartPolicy: Never
+      serviceAccountName: migration-service-account
+
+      containers:
+      - name: debug
+        image: ${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/database-migrations:${ENVIRONMENT}
+        imagePullPolicy: Always
+        command:
+          - sh
+          - -c
+          - |
+            set -e
+
+            echo "🔐 Fetching database credentials from Secrets Manager..."
+            SECRET_JSON=$(aws secretsmanager get-secret-value \
+              --secret-id fiap-tech-challenge/${ENVIRONMENT}/database/credentials \
+              --region ${AWS_REGION} \
+              --query SecretString \
+              --output text)
+
+            export DATABASE_URL=$(echo "$SECRET_JSON" | jq -r '.DATABASE_URL')
+            DB_HOST=$(echo "$SECRET_JSON" | jq -r '.host')
+            DB_PORT=$(echo "$SECRET_JSON" | jq -r '.port')
+            DB_NAME=$(echo "$SECRET_JSON" | jq -r '.dbname')
+            DB_USER=$(echo "$SECRET_JSON" | jq -r '.username')
+            DB_PASS=$(echo "$SECRET_JSON" | jq -r '.password')
+
+            echo "📊 Database: ${DB_HOST}:${DB_PORT}/${DB_NAME}"
+            echo ""
+
+            echo "============================================"
+            echo "1. CHECKING DOCKER IMAGE CONTENTS"
+            echo "============================================"
+            echo ""
+            echo "📁 Prisma directory structure:"
+            ls -la /app/prisma/ || echo "❌ No prisma directory!"
+            echo ""
+
+            echo "📁 Migrations directory:"
+            if [ -d /app/prisma/migrations ]; then
+              ls -la /app/prisma/migrations/
+              echo ""
+              MIGRATION_COUNT=$(ls -1 /app/prisma/migrations/ | grep -E '^[0-9]' | wc -l)
+              echo "✅ Found ${MIGRATION_COUNT} migration directories"
+            else
+              echo "❌ No migrations directory found!"
+            fi
+            echo ""
+
+            echo "============================================"
+            echo "2. CHECKING DATABASE CONNECTION"
+            echo "============================================"
+            echo ""
+
+            # Test connection using psql
+            export PGPASSWORD="$DB_PASS"
+            echo "Testing connection with psql..."
+            if psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c "SELECT version();" > /tmp/db_test.log 2>&1; then
+              echo "✅ Database connection successful!"
+              cat /tmp/db_test.log
+            else
+              echo "❌ Database connection failed!"
+              cat /tmp/db_test.log
+              exit 1
+            fi
+            echo ""
+
+            echo "============================================"
+            echo "3. LISTING ALL DATABASE TABLES"
+            echo "============================================"
+            echo ""
+
+            psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c "
+              SELECT schemaname, tablename
+              FROM pg_catalog.pg_tables
+              WHERE schemaname = 'public'
+              ORDER BY tablename;
+            "
+            echo ""
+
+            echo "============================================"
+            echo "4. CHECKING PRISMA MIGRATION HISTORY"
+            echo "============================================"
+            echo ""
+
+            # Check if _prisma_migrations table exists
+            if psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c "\dt _prisma_migrations" 2>&1 | grep -q "_prisma_migrations"; then
+              echo "✅ _prisma_migrations table exists"
+              echo ""
+              echo "Applied migrations:"
+              psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c "
+                SELECT migration_name,
+                       finished_at,
+                       applied_steps_count
+                FROM _prisma_migrations
+                ORDER BY started_at;
+              "
+              echo ""
+              APPLIED_COUNT=$(psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -t -c "SELECT COUNT(*) FROM _prisma_migrations;")
+              echo "✅ Total applied migrations: ${APPLIED_COUNT}"
+            else
+              echo "❌ _prisma_migrations table does NOT exist!"
+              echo "This means Prisma migrations have NEVER been run on this database."
+            fi
+            echo ""
+
+            echo "============================================"
+            echo "5. COMPARING MIGRATION FILES VS DATABASE"
+            echo "============================================"
+            echo ""
+
+            cd /app
+            echo "Running Prisma migrate status..."
+            prisma migrate status --schema=./prisma/schema.prisma || true
+            echo ""
+
+            echo "============================================"
+            echo "6. SAMPLE TABLE VERIFICATION"
+            echo "============================================"
+            echo ""
+
+            # Check if expected tables exist
+            for table in clients vehicles employees service_orders budgets stock_items; do
+              if psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c "\dt $table" 2>&1 | grep -q "$table"; then
+                echo "✅ Table '$table' exists"
+                # Show column count
+                COL_COUNT=$(psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -t -c "SELECT COUNT(*) FROM information_schema.columns WHERE table_name='$table';")
+                echo "   → Has ${COL_COUNT} columns"
+              else
+                echo "❌ Table '$table' does NOT exist"
+              fi
+            done
+            echo ""
+
+            echo "============================================"
+            echo "✅ DEBUG COMPLETE"
+            echo "============================================"
+
+        env:
+        - name: AWS_REGION
+          value: "us-east-1"
+        - name: ENVIRONMENT
+          value: "${ENVIRONMENT}"
