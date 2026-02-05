@@ -1,0 +1,29 @@
+# Terraform files
+terraform/
+*.tfstate
+*.tfstate.backup
+.terraform/
+
+# Scripts (not needed in image)
+scripts/
+
+# Kubernetes manifests (not needed in image)
+k8s/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# Documentation
+*.md
+!prisma/**/*.md
+
+# Node modules (will be installed fresh)
+node_modules/
+
+# Logs
+*.log

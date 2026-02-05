@@ -3,7 +3,7 @@
 # Automated Migration Trigger
 # =============================================================================
 # Runs automatically in CI/CD after Terraform creates RDS
-# Triggers Kubernetes Job to run migrations
+# Builds Docker image with migrations and triggers Kubernetes Job
 # =============================================================================
 
 set -e
@@ -21,23 +21,42 @@ ENVIRONMENT="${ENVIRONMENT:-staging}"
 AWS_REGION="${AWS_REGION:-us-east-1}"
 CLUSTER_NAME="fiap-tech-challenge-eks-${ENVIRONMENT}"
 AWS_ACCOUNT_ID="${AWS_ACCOUNT_ID:-118735037876}"
+IMAGE_TAG="${ENVIRONMENT}-$(date +%Y%m%d-%H%M%S)"
 
 echo -e "\n${YELLOW}Configuration:${NC}"
 echo "  Environment: $ENVIRONMENT"
 echo "  AWS Region: $AWS_REGION"
 echo "  EKS Cluster: $CLUSTER_NAME"
+echo "  Image Tag: $IMAGE_TAG"
+
+# Determine registry (GitHub Container Registry for this project)
+REGISTRY="ghcr.io/fiap-tech-challenge-projects"
+IMAGE_NAME="database-migrations"
+FULL_IMAGE="${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+LATEST_IMAGE="${REGISTRY}/${IMAGE_NAME}:${ENVIRONMENT}"
+
+echo -e "\n${YELLOW}Building Docker image with migrations...${NC}"
+cd "$(dirname "$0")/.."
+
+# Build the Docker image
+docker build -f Dockerfile.migrations -t "$FULL_IMAGE" -t "$LATEST_IMAGE" .
+
+echo -e "\n${YELLOW}Pushing Docker image to registry...${NC}"
+# Login to GitHub Container Registry (assumes GITHUB_TOKEN is set)
+if [ -n "$GITHUB_TOKEN" ]; then
+  echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+fi
+
+docker push "$FULL_IMAGE"
+docker push "$LATEST_IMAGE"
+
+echo -e "${GREEN}✓ Docker image pushed: $LATEST_IMAGE${NC}"
 
 echo -e "\n${YELLOW}Configuring kubectl...${NC}"
 aws eks update-kubeconfig --region "$AWS_REGION" --name "$CLUSTER_NAME"
 
 echo -e "\n${YELLOW}Ensuring namespace exists...${NC}"
 kubectl create namespace "ftc-app-${ENVIRONMENT}" --dry-run=client -o yaml | kubectl apply -f -
-
-echo -e "\n${YELLOW}Creating Prisma schema ConfigMap...${NC}"
-kubectl create configmap prisma-schema-files \
-  --from-file=../prisma/schema/ \
-  --namespace="ftc-app-${ENVIRONMENT}" \
-  --dry-run=client -o yaml | kubectl apply -f -
 
 echo -e "\n${YELLOW}Cleaning up previous migration job if exists...${NC}"
 kubectl delete job database-migration -n "ftc-app-${ENVIRONMENT}" --ignore-not-found=true
@@ -98,19 +117,17 @@ kill $LOGS_PID 2>/dev/null || true
 JOB_STATUS=$(kubectl get job database-migration -n "ftc-app-${ENVIRONMENT}" -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}')
 
 if [ "$JOB_STATUS" == "True" ]; then
-  echo -e "\n${GREEN}Migration completed successfully!${NC}"
+  echo -e "\n${GREEN}✅ Migration completed successfully!${NC}"
   echo -e "\n${YELLOW}Full migration logs:${NC}"
   cat /tmp/migration-logs.txt 2>/dev/null || kubectl logs job/database-migration -n "ftc-app-${ENVIRONMENT}"
   exit 0
 else
-  echo -e "\n${RED}Migration failed or timed out!${NC}"
+  echo -e "\n${RED}❌ Migration failed or timed out!${NC}"
   echo -e "\n${YELLOW}Job status:${NC}"
-  kubectl get job database-migration -n "ftc-app-${ENVIRONMENT}" -o yaml 2>/dev/null || echo "Job not found (may have been deleted by ttlSecondsAfterFinished)"
+  kubectl get job database-migration -n "ftc-app-${ENVIRONMENT}" -o yaml 2>/dev/null || echo "Job not found"
   echo -e "\n${YELLOW}Pod status:${NC}"
   kubectl get pods -n "ftc-app-${ENVIRONMENT}" -l app=database-migration
-  echo -e "\n${YELLOW}Pod events:${NC}"
-  kubectl get events -n "ftc-app-${ENVIRONMENT}" --field-selector involvedObject.kind=Pod --sort-by='.lastTimestamp' | tail -20
-  echo -e "\n${YELLOW}Complete pod logs (captured during execution):${NC}"
+  echo -e "\n${YELLOW}Complete pod logs:${NC}"
   if [ -f /tmp/migration-logs.txt ]; then
     cat /tmp/migration-logs.txt
   else
