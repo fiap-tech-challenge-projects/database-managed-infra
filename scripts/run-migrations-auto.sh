@@ -21,36 +21,19 @@ ENVIRONMENT="${ENVIRONMENT:-staging}"
 AWS_REGION="${AWS_REGION:-us-east-1}"
 CLUSTER_NAME="fiap-tech-challenge-eks-${ENVIRONMENT}"
 AWS_ACCOUNT_ID="${AWS_ACCOUNT_ID:-118735037876}"
-IMAGE_TAG="${ENVIRONMENT}-$(date +%Y%m%d-%H%M%S)"
-
 echo -e "\n${YELLOW}Configuration:${NC}"
 echo "  Environment: $ENVIRONMENT"
 echo "  AWS Region: $AWS_REGION"
 echo "  EKS Cluster: $CLUSTER_NAME"
-echo "  Image Tag: $IMAGE_TAG"
 
-# Determine registry (GitHub Container Registry for this project)
+# Docker image is already built and pushed by GitHub Actions workflow
+# Just reference the image that was built
 REGISTRY="ghcr.io/fiap-tech-challenge-projects/database-managed-infra"
 IMAGE_NAME="migrations"
-FULL_IMAGE="${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
 LATEST_IMAGE="${REGISTRY}/${IMAGE_NAME}:${ENVIRONMENT}"
 
-echo -e "\n${YELLOW}Building Docker image with migrations...${NC}"
-cd "$(dirname "$0")/.."
-
-# Build the Docker image
-docker build -f Dockerfile.migrations -t "$FULL_IMAGE" -t "$LATEST_IMAGE" .
-
-echo -e "\n${YELLOW}Pushing Docker image to registry...${NC}"
-# Login to GitHub Container Registry (assumes GITHUB_TOKEN is set)
-if [ -n "$GITHUB_TOKEN" ]; then
-  echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
-fi
-
-docker push "$FULL_IMAGE"
-docker push "$LATEST_IMAGE"
-
-echo -e "${GREEN}✓ Docker image pushed: $LATEST_IMAGE${NC}"
+echo -e "\n${YELLOW}Using Docker image: ${LATEST_IMAGE}${NC}"
+echo -e "${GREEN}(Image was built and pushed by GitHub Actions workflow)${NC}"
 
 echo -e "\n${YELLOW}Configuring kubectl...${NC}"
 aws eks update-kubeconfig --region "$AWS_REGION" --name "$CLUSTER_NAME"
@@ -76,14 +59,26 @@ metadata:
 EOF
 
 echo -e "\n${YELLOW}Applying migration job...${NC}"
-cat ../k8s/migration-job.yaml | \
+
+# Script is executed from scripts/ directory by GitHub Actions
+# So we need to go up one level to access k8s/ directory
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+MIGRATION_JOB_YAML="$REPO_ROOT/k8s/migration-job.yaml"
+
+if [ ! -f "$MIGRATION_JOB_YAML" ]; then
+  echo -e "${RED}Error: migration-job.yaml not found at $MIGRATION_JOB_YAML${NC}"
+  exit 1
+fi
+
+cat "$MIGRATION_JOB_YAML" | \
   sed "s/\${ENVIRONMENT}/${ENVIRONMENT}/g" | \
   sed "s/\${AWS_ACCOUNT_ID}/${AWS_ACCOUNT_ID}/g" | \
   sed '/^---$/,$d' | \
   kubectl apply -f - || {
     echo -e "${RED}Failed to create migration job!${NC}"
     echo -e "${YELLOW}Showing processed YAML:${NC}"
-    cat ../k8s/migration-job.yaml | \
+    cat "$MIGRATION_JOB_YAML" | \
       sed "s/\${ENVIRONMENT}/${ENVIRONMENT}/g" | \
       sed "s/\${AWS_ACCOUNT_ID}/${AWS_ACCOUNT_ID}/g" | \
       sed '/^---$/,$d'
