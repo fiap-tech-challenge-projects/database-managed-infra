@@ -104,22 +104,13 @@ resource "aws_security_group" "documentdb" {
   description = "Security group for DocumentDB cluster (Execution Service)"
   vpc_id      = data.aws_vpc.selected.id
 
-  # Allow MongoDB traffic from EKS nodes
+  # Allow MongoDB traffic from VPC (EKS pods and Lambda functions)
   ingress {
-    description     = "MongoDB from EKS"
-    from_port       = 27017
-    to_port         = 27017
-    protocol        = "tcp"
-    security_groups = [data.aws_security_group.eks_nodes.id]
-  }
-
-  # Allow MongoDB traffic from Lambda (if needed for saga compensation)
-  ingress {
-    description = "MongoDB from Lambda"
+    description = "MongoDB from VPC"
     from_port   = 27017
     to_port     = 27017
     protocol    = "tcp"
-    cidr_blocks = data.aws_subnets.private.*.cidr_block
+    cidr_blocks = [data.aws_vpc.selected.cidr_block]
   }
 
   egress {
