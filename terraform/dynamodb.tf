@@ -210,42 +210,46 @@ resource "aws_iam_policy" "billing_service_dynamodb" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "DynamoDBTableAccess"
-        Effect = "Allow"
-        Action = [
-          "dynamodb:BatchGetItem",
-          "dynamodb:BatchWriteItem",
-          "dynamodb:ConditionCheckItem",
-          "dynamodb:PutItem",
-          "dynamodb:DescribeTable",
-          "dynamodb:DeleteItem",
-          "dynamodb:GetItem",
-          "dynamodb:Scan",
-          "dynamodb:Query",
-          "dynamodb:UpdateItem"
-        ]
-        Resource = [
-          aws_dynamodb_table.budgets.arn,
-          "${aws_dynamodb_table.budgets.arn}/index/*",
-          aws_dynamodb_table.payments.arn,
-          "${aws_dynamodb_table.payments.arn}/index/*",
-          aws_dynamodb_table.budget_items.arn
-        ]
-      },
-      {
-        Sid    = "DynamoDBKMSAccess"
-        Effect = "Allow"
-        Action = [
-          "kms:Decrypt",
-          "kms:DescribeKey",
-          "kms:Encrypt",
-          "kms:GenerateDataKey"
-        ]
-        Resource = var.environment == "production" ? [aws_kms_key.dynamodb[0].arn] : []
-      }
-    ]
+    Statement = concat(
+      [
+        {
+          Sid    = "DynamoDBTableAccess"
+          Effect = "Allow"
+          Action = [
+            "dynamodb:BatchGetItem",
+            "dynamodb:BatchWriteItem",
+            "dynamodb:ConditionCheckItem",
+            "dynamodb:PutItem",
+            "dynamodb:DescribeTable",
+            "dynamodb:DeleteItem",
+            "dynamodb:GetItem",
+            "dynamodb:Scan",
+            "dynamodb:Query",
+            "dynamodb:UpdateItem"
+          ]
+          Resource = [
+            aws_dynamodb_table.budgets.arn,
+            "${aws_dynamodb_table.budgets.arn}/index/*",
+            aws_dynamodb_table.payments.arn,
+            "${aws_dynamodb_table.payments.arn}/index/*",
+            aws_dynamodb_table.budget_items.arn
+          ]
+        }
+      ],
+      var.environment == "production" ? [
+        {
+          Sid    = "DynamoDBKMSAccess"
+          Effect = "Allow"
+          Action = [
+            "kms:Decrypt",
+            "kms:DescribeKey",
+            "kms:Encrypt",
+            "kms:GenerateDataKey"
+          ]
+          Resource = [aws_kms_key.dynamodb[0].arn]
+        }
+      ] : []
+    )
   })
 
   tags = var.common_tags

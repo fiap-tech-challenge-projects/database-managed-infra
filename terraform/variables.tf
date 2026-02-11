@@ -49,6 +49,12 @@ variable "environment" {
   }
 }
 
+variable "enable_documentdb" {
+  description = "Enable DocumentDB (MongoDB-compatible). Set to false for AWS Academy (not supported in free tier)"
+  type        = bool
+  default     = false
+}
+
 variable "common_tags" {
   description = "Tags comuns aplicadas a todos os recursos"
   type        = map(string)

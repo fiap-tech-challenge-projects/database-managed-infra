@@ -4,6 +4,8 @@
 
 # DocumentDB Subnet Group
 resource "aws_docdb_subnet_group" "execution" {
+  count = var.enable_documentdb ? 1 : 0
+
   name       = "${var.project_name}-execution-docdb-subnet-${var.environment}"
   subnet_ids = local.db_subnet_ids
 
@@ -16,6 +18,8 @@ resource "aws_docdb_subnet_group" "execution" {
 
 # DocumentDB Cluster Parameter Group
 resource "aws_docdb_cluster_parameter_group" "execution" {
+  count = var.enable_documentdb ? 1 : 0
+
   family      = "docdb5.0"
   name        = "${var.project_name}-execution-docdb-params-${var.environment}"
   description = "DocumentDB cluster parameter group for Execution Service"
@@ -44,6 +48,8 @@ resource "aws_docdb_cluster_parameter_group" "execution" {
 
 # Random password for DocumentDB
 resource "random_password" "documentdb_password" {
+  count = var.enable_documentdb ? 1 : 0
+
   length  = 32
   special = true
   # DocumentDB password requirements
@@ -52,19 +58,21 @@ resource "random_password" "documentdb_password" {
 
 # DocumentDB Cluster
 resource "aws_docdb_cluster" "execution" {
+  count = var.enable_documentdb ? 1 : 0
+
   cluster_identifier      = "${var.project_name}-execution-${var.environment}"
   engine                  = "docdb"
   engine_version          = "5.0.0"
   master_username         = "docdbadmin"
-  master_password         = random_password.documentdb_password.result
+  master_password         = random_password.documentdb_password[0].result
   backup_retention_period = var.environment == "production" ? 7 : 1
   preferred_backup_window = "03:00-04:00"
   skip_final_snapshot     = var.environment != "production"
   final_snapshot_identifier = var.environment == "production" ? "${var.project_name}-execution-final-${var.environment}-${formatdate("YYYY-MM-DD-hhmm", timestamp())}" : null
 
-  db_subnet_group_name            = aws_docdb_subnet_group.execution.name
-  db_cluster_parameter_group_name = aws_docdb_cluster_parameter_group.execution.name
-  vpc_security_group_ids          = [aws_security_group.documentdb.id]
+  db_subnet_group_name            = aws_docdb_subnet_group.execution[0].name
+  db_cluster_parameter_group_name = aws_docdb_cluster_parameter_group.execution[0].name
+  vpc_security_group_ids          = [aws_security_group.documentdb[0].id]
 
   # Encryption at rest
   storage_encrypted = true
@@ -82,10 +90,10 @@ resource "aws_docdb_cluster" "execution" {
 
 # DocumentDB Cluster Instances
 resource "aws_docdb_cluster_instance" "execution" {
-  count = var.environment == "production" ? 2 : 1 # 2 instances for production, 1 for dev
+  count = var.enable_documentdb ? (var.environment == "production" ? 2 : 1) : 0
 
   identifier         = "${var.project_name}-execution-${var.environment}-${count.index + 1}"
-  cluster_identifier = aws_docdb_cluster.execution.id
+  cluster_identifier = aws_docdb_cluster.execution[0].id
   instance_class     = var.environment == "production" ? "db.t3.medium" : "db.t3.medium"
 
   # Auto minor version upgrades
@@ -100,6 +108,8 @@ resource "aws_docdb_cluster_instance" "execution" {
 
 # Security Group for DocumentDB
 resource "aws_security_group" "documentdb" {
+  count = var.enable_documentdb ? 1 : 0
+
   name        = "${var.project_name}-documentdb-sg-${var.environment}"
   description = "Security group for DocumentDB cluster (Execution Service)"
   vpc_id      = data.aws_vpc.selected.id
@@ -130,7 +140,7 @@ resource "aws_security_group" "documentdb" {
 
 # KMS Key for DocumentDB encryption (production only)
 resource "aws_kms_key" "documentdb" {
-  count = var.environment == "production" ? 1 : 0
+  count = var.enable_documentdb && var.environment == "production" ? 1 : 0
 
   description             = "KMS key for DocumentDB encryption - ${var.environment}"
   deletion_window_in_days = 10
@@ -144,7 +154,7 @@ resource "aws_kms_key" "documentdb" {
 }
 
 resource "aws_kms_alias" "documentdb" {
-  count = var.environment == "production" ? 1 : 0
+  count = var.enable_documentdb && var.environment == "production" ? 1 : 0
 
   name          = "alias/${var.project_name}-documentdb-${var.environment}"
   target_key_id = aws_kms_key.documentdb[0].key_id
@@ -152,6 +162,8 @@ resource "aws_kms_alias" "documentdb" {
 
 # Store DocumentDB credentials in Secrets Manager
 resource "aws_secretsmanager_secret" "documentdb_credentials" {
+  count = var.enable_documentdb ? 1 : 0
+
   name        = "${var.project_name}/${var.environment}/documentdb/credentials"
   description = "DocumentDB connection credentials for Execution Service"
 
@@ -163,20 +175,24 @@ resource "aws_secretsmanager_secret" "documentdb_credentials" {
 }
 
 resource "aws_secretsmanager_secret_version" "documentdb_credentials" {
-  secret_id = aws_secretsmanager_secret.documentdb_credentials.id
+  count = var.enable_documentdb ? 1 : 0
+
+  secret_id = aws_secretsmanager_secret.documentdb_credentials[0].id
 
   secret_string = jsonencode({
-    username = aws_docdb_cluster.execution.master_username
-    password = random_password.documentdb_password.result
-    host     = aws_docdb_cluster.execution.endpoint
-    port     = aws_docdb_cluster.execution.port
+    username = aws_docdb_cluster.execution[0].master_username
+    password = random_password.documentdb_password[0].result
+    host     = aws_docdb_cluster.execution[0].endpoint
+    port     = aws_docdb_cluster.execution[0].port
     database = "execution_service_${var.environment}"
-    uri      = "mongodb://${aws_docdb_cluster.execution.master_username}:${random_password.documentdb_password.result}@${aws_docdb_cluster.execution.endpoint}:${aws_docdb_cluster.execution.port}/execution_service_${var.environment}?tls=true&replicaSet=rs0&readPreference=secondaryPreferred&retryWrites=false"
+    uri      = "mongodb://${aws_docdb_cluster.execution[0].master_username}:${random_password.documentdb_password[0].result}@${aws_docdb_cluster.execution[0].endpoint}:${aws_docdb_cluster.execution[0].port}/execution_service_${var.environment}?tls=true&replicaSet=rs0&readPreference=secondaryPreferred&retryWrites=false"
   })
 }
 
 # IAM Policy for execution-service to access DocumentDB credentials
 resource "aws_iam_policy" "execution_service_secrets" {
+  count = var.enable_documentdb ? 1 : 0
+
   name        = "${var.project_name}-execution-service-secrets-${var.environment}"
   description = "Allow Execution Service to read DocumentDB credentials from Secrets Manager"
 
@@ -190,7 +206,7 @@ resource "aws_iam_policy" "execution_service_secrets" {
           "secretsmanager:GetSecretValue",
           "secretsmanager:DescribeSecret"
         ]
-        Resource = aws_secretsmanager_secret.documentdb_credentials.arn
+        Resource = aws_secretsmanager_secret.documentdb_credentials[0].arn
       },
       {
         Sid    = "DecryptSecrets"
