@@ -5,7 +5,7 @@
 # DocumentDB Subnet Group
 resource "aws_docdb_subnet_group" "execution" {
   name       = "${var.project_name}-execution-docdb-subnet-${var.environment}"
-  subnet_ids = data.aws_subnets.private.ids
+  subnet_ids = local.db_subnet_ids
 
   tags = merge(var.common_tags, {
     Name    = "${var.project_name}-execution-docdb-subnet-${var.environment}"
