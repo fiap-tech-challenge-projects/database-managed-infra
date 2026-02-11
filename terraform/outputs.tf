@@ -211,52 +211,91 @@ output "billing_service_dynamodb_policy_arn" {
 }
 
 # =============================================================================
+# Phase 4 Outputs - DynamoDB Tables (Execution Service)
+# =============================================================================
+
+output "dynamodb_executions_table_name" {
+  description = "Name of the DynamoDB Executions table"
+  value       = aws_dynamodb_table.executions.name
+}
+
+output "dynamodb_executions_table_arn" {
+  description = "ARN of the DynamoDB Executions table"
+  value       = aws_dynamodb_table.executions.arn
+}
+
+output "dynamodb_execution_steps_table_name" {
+  description = "Name of the DynamoDB Execution Steps table"
+  value       = aws_dynamodb_table.execution_steps.name
+}
+
+output "dynamodb_execution_steps_table_arn" {
+  description = "ARN of the DynamoDB Execution Steps table"
+  value       = aws_dynamodb_table.execution_steps.arn
+}
+
+output "dynamodb_work_queue_table_name" {
+  description = "Name of the DynamoDB Work Queue table"
+  value       = aws_dynamodb_table.work_queue.name
+}
+
+output "dynamodb_work_queue_table_arn" {
+  description = "ARN of the DynamoDB Work Queue table"
+  value       = aws_dynamodb_table.work_queue.arn
+}
+
+output "execution_service_dynamodb_policy_arn" {
+  description = "ARN of IAM policy for Execution Service to access DynamoDB"
+  value       = aws_iam_policy.execution_service_dynamodb.arn
+}
+
+# =============================================================================
 # Phase 4 Outputs - DocumentDB Cluster (Execution Service)
 # =============================================================================
 
 output "documentdb_cluster_endpoint" {
   description = "Endpoint of the DocumentDB cluster"
-  value       = aws_docdb_cluster.execution.endpoint
+  value       = var.enable_documentdb ? aws_docdb_cluster.execution[0].endpoint : null
 }
 
 output "documentdb_cluster_reader_endpoint" {
   description = "Reader endpoint of the DocumentDB cluster"
-  value       = aws_docdb_cluster.execution.reader_endpoint
+  value       = var.enable_documentdb ? aws_docdb_cluster.execution[0].reader_endpoint : null
 }
 
 output "documentdb_cluster_port" {
   description = "Port of the DocumentDB cluster"
-  value       = aws_docdb_cluster.execution.port
+  value       = var.enable_documentdb ? aws_docdb_cluster.execution[0].port : null
 }
 
 output "documentdb_cluster_id" {
   description = "ID of the DocumentDB cluster"
-  value       = aws_docdb_cluster.execution.id
+  value       = var.enable_documentdb ? aws_docdb_cluster.execution[0].id : null
 }
 
 output "documentdb_cluster_arn" {
   description = "ARN of the DocumentDB cluster"
-  value       = aws_docdb_cluster.execution.arn
+  value       = var.enable_documentdb ? aws_docdb_cluster.execution[0].arn : null
 }
 
 output "documentdb_security_group_id" {
   description = "ID of the DocumentDB security group"
-  value       = aws_security_group.documentdb.id
+  value       = var.enable_documentdb ? aws_security_group.documentdb[0].id : null
 }
 
 output "documentdb_credentials_secret_arn" {
   description = "ARN of the secret containing DocumentDB credentials"
-  value       = aws_secretsmanager_secret.documentdb_credentials.arn
+  value       = var.enable_documentdb ? aws_secretsmanager_secret.documentdb_credentials[0].arn : null
 }
 
 output "documentdb_credentials_secret_name" {
   description = "Name of the secret containing DocumentDB credentials"
-  value       = aws_secretsmanager_secret.documentdb_credentials.name
+  value       = var.enable_documentdb ? aws_secretsmanager_secret.documentdb_credentials[0].name : null
 }
 
 output "execution_service_secrets_policy_arn" {
   description = "ARN of IAM policy for Execution Service to access DocumentDB credentials"
-  value       = aws_iam_policy.execution_service_secrets.arn
+  value       = var.enable_documentdb ? aws_iam_policy.execution_service_secrets[0].arn : null
 }
 
 output "summary" {
@@ -273,29 +312,37 @@ output "summary" {
     security_groups = {
       rds_sg    = aws_security_group.rds.id
       lambda_sg = aws_security_group.lambda_rds_access.id
-      documentdb_sg = aws_security_group.documentdb.id
+      documentdb_sg = var.enable_documentdb ? aws_security_group.documentdb[0].id : null
     }
     secrets = {
       database_credentials = aws_secretsmanager_secret.database_credentials.name
       auth_config          = aws_secretsmanager_secret.auth_config.name
       app_env              = aws_secretsmanager_secret.app_env.name
-      documentdb_credentials = aws_secretsmanager_secret.documentdb_credentials.name
+      documentdb_credentials = var.enable_documentdb ? aws_secretsmanager_secret.documentdb_credentials[0].name : null
     }
     iam = {
-      secrets_policy_arn = aws_iam_policy.secrets_access.arn
-      billing_dynamodb_policy_arn = aws_iam_policy.billing_service_dynamodb.arn
-      execution_secrets_policy_arn = aws_iam_policy.execution_service_secrets.arn
+      secrets_policy_arn           = aws_iam_policy.secrets_access.arn
+      billing_dynamodb_policy_arn  = aws_iam_policy.billing_service_dynamodb.arn
+      execution_dynamodb_policy_arn = aws_iam_policy.execution_service_dynamodb.arn
+      execution_secrets_policy_arn = var.enable_documentdb ? aws_iam_policy.execution_service_secrets[0].arn : null
     }
     dynamodb = {
-      budgets_table = aws_dynamodb_table.budgets.name
-      payments_table = aws_dynamodb_table.payments.name
-      budget_items_table = aws_dynamodb_table.budget_items.name
+      billing = {
+        budgets_table      = aws_dynamodb_table.budgets.name
+        payments_table     = aws_dynamodb_table.payments.name
+        budget_items_table = aws_dynamodb_table.budget_items.name
+      }
+      execution = {
+        executions_table       = aws_dynamodb_table.executions.name
+        execution_steps_table  = aws_dynamodb_table.execution_steps.name
+        work_queue_table       = aws_dynamodb_table.work_queue.name
+      }
     }
-    documentdb = {
-      endpoint = aws_docdb_cluster.execution.endpoint
-      reader_endpoint = aws_docdb_cluster.execution.reader_endpoint
-      port = aws_docdb_cluster.execution.port
+    documentdb = var.enable_documentdb ? {
+      endpoint = aws_docdb_cluster.execution[0].endpoint
+      reader_endpoint = aws_docdb_cluster.execution[0].reader_endpoint
+      port = aws_docdb_cluster.execution[0].port
       database = "execution_service_${var.environment}"
-    }
+    } : null
   }
 }

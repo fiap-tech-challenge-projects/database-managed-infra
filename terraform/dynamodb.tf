@@ -254,3 +254,238 @@ resource "aws_iam_policy" "billing_service_dynamodb" {
 
   tags = var.common_tags
 }
+
+# =============================================================================
+# DynamoDB Tables for Execution Service (Phase 4)
+# =============================================================================
+
+# Table: Executions (Saga workflow instances)
+resource "aws_dynamodb_table" "executions" {
+  name         = "${var.project_name}-executions-${var.environment}"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "executionId"
+  range_key    = "timestamp"
+
+  attribute {
+    name = "executionId"
+    type = "S"
+  }
+
+  attribute {
+    name = "timestamp"
+    type = "S" # ISO 8601 timestamp
+  }
+
+  attribute {
+    name = "serviceOrderId"
+    type = "S"
+  }
+
+  attribute {
+    name = "status"
+    type = "S" # PENDING, IN_PROGRESS, COMPLETED, FAILED, COMPENSATING, COMPENSATED
+  }
+
+  # GSI for querying executions by service order
+  global_secondary_index {
+    name            = "ServiceOrderIndex"
+    hash_key        = "serviceOrderId"
+    range_key       = "timestamp"
+    projection_type = "ALL"
+  }
+
+  # GSI for querying executions by status
+  global_secondary_index {
+    name            = "StatusIndex"
+    hash_key        = "status"
+    range_key       = "timestamp"
+    projection_type = "ALL"
+  }
+
+  # TTL for automatic cleanup of old completed executions (90 days)
+  ttl {
+    attribute_name = "expiresAt"
+    enabled        = true
+  }
+
+  point_in_time_recovery {
+    enabled = var.environment == "production" ? true : false
+  }
+
+  server_side_encryption {
+    enabled     = true
+    kms_key_arn = var.environment == "production" ? aws_kms_key.dynamodb[0].arn : null
+  }
+
+  tags = merge(var.common_tags, {
+    Name     = "${var.project_name}-executions-${var.environment}"
+    Service  = "execution-service"
+    Phase    = "Phase-4"
+    DataType = "Execution"
+  })
+}
+
+# Table: ExecutionSteps (Individual saga steps)
+resource "aws_dynamodb_table" "execution_steps" {
+  name         = "${var.project_name}-execution-steps-${var.environment}"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "executionId"
+  range_key    = "stepNumber"
+
+  attribute {
+    name = "executionId"
+    type = "S"
+  }
+
+  attribute {
+    name = "stepNumber"
+    type = "N" # Order of execution
+  }
+
+  attribute {
+    name = "status"
+    type = "S" # PENDING, RUNNING, COMPLETED, FAILED, COMPENSATED
+  }
+
+  # GSI for querying steps by status
+  global_secondary_index {
+    name            = "StatusIndex"
+    hash_key        = "status"
+    range_key       = "executionId"
+    projection_type = "ALL"
+  }
+
+  point_in_time_recovery {
+    enabled = var.environment == "production" ? true : false
+  }
+
+  server_side_encryption {
+    enabled     = true
+    kms_key_arn = var.environment == "production" ? aws_kms_key.dynamodb[0].arn : null
+  }
+
+  tags = merge(var.common_tags, {
+    Name     = "${var.project_name}-execution-steps-${var.environment}"
+    Service  = "execution-service"
+    Phase    = "Phase-4"
+    DataType = "ExecutionStep"
+  })
+}
+
+# Table: WorkQueue (Execution queue management)
+resource "aws_dynamodb_table" "work_queue" {
+  name         = "${var.project_name}-work-queue-${var.environment}"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "queueId"
+  range_key    = "priority"
+
+  attribute {
+    name = "queueId"
+    type = "S"
+  }
+
+  attribute {
+    name = "priority"
+    type = "N" # Higher number = higher priority
+  }
+
+  attribute {
+    name = "serviceOrderId"
+    type = "S"
+  }
+
+  attribute {
+    name = "status"
+    type = "S" # QUEUED, ASSIGNED, IN_PROGRESS, COMPLETED
+  }
+
+  # GSI for querying by service order
+  global_secondary_index {
+    name            = "ServiceOrderIndex"
+    hash_key        = "serviceOrderId"
+    projection_type = "ALL"
+  }
+
+  # GSI for querying by status and priority
+  global_secondary_index {
+    name            = "StatusPriorityIndex"
+    hash_key        = "status"
+    range_key       = "priority"
+    projection_type = "ALL"
+  }
+
+  # TTL for automatic cleanup of old completed work items
+  ttl {
+    attribute_name = "expiresAt"
+    enabled        = true
+  }
+
+  point_in_time_recovery {
+    enabled = var.environment == "production" ? true : false
+  }
+
+  server_side_encryption {
+    enabled     = true
+    kms_key_arn = var.environment == "production" ? aws_kms_key.dynamodb[0].arn : null
+  }
+
+  tags = merge(var.common_tags, {
+    Name     = "${var.project_name}-work-queue-${var.environment}"
+    Service  = "execution-service"
+    Phase    = "Phase-4"
+    DataType = "WorkQueue"
+  })
+}
+
+# IAM Policy for execution-service to access DynamoDB tables
+resource "aws_iam_policy" "execution_service_dynamodb" {
+  name        = "${var.project_name}-execution-service-dynamodb-${var.environment}"
+  description = "Allow Execution Service to access DynamoDB tables"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = concat(
+      [
+        {
+          Sid    = "DynamoDBTableAccess"
+          Effect = "Allow"
+          Action = [
+            "dynamodb:BatchGetItem",
+            "dynamodb:BatchWriteItem",
+            "dynamodb:ConditionCheckItem",
+            "dynamodb:PutItem",
+            "dynamodb:DescribeTable",
+            "dynamodb:DeleteItem",
+            "dynamodb:GetItem",
+            "dynamodb:Scan",
+            "dynamodb:Query",
+            "dynamodb:UpdateItem"
+          ]
+          Resource = [
+            aws_dynamodb_table.executions.arn,
+            "${aws_dynamodb_table.executions.arn}/index/*",
+            aws_dynamodb_table.execution_steps.arn,
+            "${aws_dynamodb_table.execution_steps.arn}/index/*",
+            aws_dynamodb_table.work_queue.arn,
+            "${aws_dynamodb_table.work_queue.arn}/index/*"
+          ]
+        }
+      ],
+      var.environment == "production" ? [
+        {
+          Sid    = "DynamoDBKMSAccess"
+          Effect = "Allow"
+          Action = [
+            "kms:Decrypt",
+            "kms:DescribeKey",
+            "kms:Encrypt",
+            "kms:GenerateDataKey"
+          ]
+          Resource = [aws_kms_key.dynamodb[0].arn]
+        }
+      ] : []
+    )
+  })
+
+  tags = var.common_tags
+}
