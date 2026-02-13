@@ -114,7 +114,7 @@ chmod +x scripts/run-migrations.sh
 | Variavel | Descricao | Default |
 |----------|-----------|---------|
 | `aws_region` | Regiao AWS | `us-east-1` |
-| `environment` | Ambiente (development/staging/production) | `development` |
+| `environment` | Ambiente (development/production) | `development` |
 | `db_instance_class` | Classe da instancia RDS | `db.t3.micro` |
 | `db_allocated_storage` | Armazenamento em GB | `20` |
 | `db_engine_version` | Versao do PostgreSQL | `15.4` |
