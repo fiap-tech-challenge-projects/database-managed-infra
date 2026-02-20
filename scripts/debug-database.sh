@@ -16,7 +16,7 @@ echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}  Database Debug Check${NC}"
 echo -e "${GREEN}========================================${NC}"
 
-ENVIRONMENT="${ENVIRONMENT:-staging}"
+ENVIRONMENT="${ENVIRONMENT:-development}"
 AWS_REGION="${AWS_REGION:-us-east-1}"
 CLUSTER_NAME="fiap-tech-challenge-eks-${ENVIRONMENT}"
 AWS_ACCOUNT_ID="${AWS_ACCOUNT_ID:-118735037876}"

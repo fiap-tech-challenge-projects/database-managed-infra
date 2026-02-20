@@ -39,14 +39,20 @@ variable "project_name" {
 }
 
 variable "environment" {
-  description = "Ambiente de deploy (development, staging, production)"
+  description = "Ambiente de deploy (development, production)"
   type        = string
   default     = "development"
 
   validation {
-    condition     = contains(["development", "staging", "production"], var.environment)
-    error_message = "Environment deve ser: development, staging ou production."
+    condition     = contains(["development", "production"], var.environment)
+    error_message = "Environment deve ser: development ou production."
   }
+}
+
+variable "enable_documentdb" {
+  description = "Enable DocumentDB (MongoDB-compatible). Set to false for AWS Academy (not supported in free tier)"
+  type        = bool
+  default     = false
 }
 
 variable "common_tags" {

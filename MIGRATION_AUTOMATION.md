@@ -94,7 +94,7 @@ sequenceDiagram
 
 **No action required!** Migrations run automatically when:
 
-1. You push to `develop` branch → Staging migrations run
+1. You push to `develop` branch → Development migrations run
 2. You push to `main` branch → Production migrations run
 
 ### Manual (Local Development)
@@ -112,7 +112,7 @@ The automation script uses:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ENVIRONMENT` | `staging` | Target environment |
+| `ENVIRONMENT` | `development` | Target environment |
 | `AWS_REGION` | `us-east-1` | AWS region |
 | `AWS_ACCOUNT_ID` | `118735037876` | AWS Academy account |
 
@@ -128,8 +128,8 @@ The automation script uses:
 Check migration status:
 
 ```bash
-kubectl get jobs -n ftc-app-staging
-kubectl logs job/database-migration -n ftc-app-staging
+kubectl get jobs -n ftc-app-development
+kubectl logs job/database-migration -n ftc-app-development
 ```
 
 ## Troubleshooting
@@ -137,21 +137,21 @@ kubectl logs job/database-migration -n ftc-app-staging
 ### Job Failed
 
 ```bash
-kubectl describe job database-migration -n ftc-app-staging
-kubectl logs job/database-migration -n ftc-app-staging
+kubectl describe job database-migration -n ftc-app-development
+kubectl logs job/database-migration -n ftc-app-development
 ```
 
 ### Re-run Migration Manually
 
 ```bash
-kubectl delete job database-migration -n ftc-app-staging
+kubectl delete job database-migration -n ftc-app-development
 cd scripts && ./run-migrations-auto.sh
 ```
 
 ### Clean Up Old Jobs
 
 ```bash
-kubectl delete job database-migration -n ftc-app-staging --ignore-not-found
+kubectl delete job database-migration -n ftc-app-development --ignore-not-found
 ```
 
 ## Security
